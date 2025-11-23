@@ -1,4 +1,4 @@
 export * from "./IconFont";
-export * from "./IconFontGlyph";
+export * from "./IconGlyph";
 export * from "./IconPath";
 export * from "./types";

@@ -1,17 +1,17 @@
 import { Glyph } from "opentype.js";
 import type { IconPath } from "./IconPath";
-import type { IconFontGlyphOptions } from "./types";
+import type { IconGlyphOptions } from "./types";
 
 /**
  * Represents a single glyph (icon) in a custom icon font.
  *
- * An IconFontGlyph encapsulates the metadata and vector path for an icon,
+ * An IconGlyph encapsulates the metadata and vector path for an icon,
  * providing utilities to export it into different formats:
  *
  * - As an OpenType.js Glyph, suitable for inclusion in a generated font.
  * - As a CSS rule, enabling usage in web projects via pseudo-elements.
  *
- * Each IconFontGlyph stores:
+ * Each IconGlyph stores:
  * - `name`: the human-readable identifier (used in CSS class names).
  * - `unicode`: the code point assigned to the glyph.
  * - `path`: the vector outline (IconPath) describing the shape.
@@ -20,7 +20,7 @@ import type { IconFontGlyphOptions } from "./types";
  * - `description`: optional descriptive metadata (e.g. category or notes).
  *
  * Typical usage:
- *   const icon = new IconFontGlyph({
+ *   const icon = new IconGlyph({
  *     name: "home",
  *     unicode: 0xe001,
  *     path,
@@ -36,8 +36,8 @@ import type { IconFontGlyphOptions } from "./types";
  * and runtime font/CSS representations, while supporting
  * per-glyph spacing and metadata overrides.
  */
-export class IconFontGlyph {
-  constructor(options: IconFontGlyphOptions) {
+export class IconGlyph {
+  constructor(options: IconGlyphOptions) {
     this._name = options.name;
     this._unicode = options.unicode;
     this._path = options.path;

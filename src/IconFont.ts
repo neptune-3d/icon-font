@@ -1,15 +1,15 @@
 import { Font } from "opentype.js";
 import ttf2woff from "ttf2woff";
 import ttf2woff2 from "ttf2woff2";
-import type { IconFontGlyph } from "./IconFontGlyph";
+import type { IconGlyph } from "./IconGlyph";
 import type { IconFontOptions } from "./types";
 
 /**
- * Represents a complete icon font family composed of multiple IconFontGlyphs.
+ * Represents a complete icon font family composed of multiple IconGlyphs.
  *
  * An IconFont bundles together:
  * - Core metadata: `familyName`, `prefix`, `unitsPerEm`, `ascender`, `descender`.
- * - A collection of IconFontGlyph instances (`icons`) that define the glyph set.
+ * - A collection of IconGlyph instances (`icons`) that define the glyph set.
  * - Extended OpenType.js font metadata such as `styleName`, `copyright`,
  *   `trademark`, `manufacturer`, `designer`, `designerURL`, `manufacturerURL`,
  *   `version`, `description`, `license`, and `licenseURL`.
@@ -28,7 +28,7 @@ import type { IconFontOptions } from "./types";
  *   const font = new IconFont({
  *     familyName: "neptune",
  *     prefix: "ni",
- *     icons: [new IconFontGlyph(...)],
+ *     icons: [new IconGlyph(...)],
  *     unitsPerEm: 1000,
  *     ascender: 800,
  *     descender: -200,
@@ -69,7 +69,7 @@ export class IconFont {
 
   protected _familyName: string;
   protected _prefix: string;
-  protected _icons: IconFontGlyph[];
+  protected _icons: IconGlyph[];
   protected _unitsPerEm: number;
   protected _ascender: number;
   protected _descender: number;

@@ -1,4 +1,4 @@
-import type { IconFontGlyph } from "./IconFontGlyph";
+import type { IconGlyph } from "./IconGlyph";
 import type { IconPath } from "./IconPath";
 
 export type MoveCommand = { type: "M"; x: number; y: number };
@@ -103,7 +103,7 @@ export type IconFontOptions = {
   familyName: string; // Font family name
   /** CSS class prefix */
   prefix: string;
-  icons: IconFontGlyph[];
+  icons: IconGlyph[];
   /** Default: 1000 */
   unitsPerEm?: number;
   /** Default: 800 */
@@ -125,12 +125,12 @@ export type IconFontOptions = {
 };
 
 /**
- * Options for constructing an IconFontGlyph.
+ * Options for constructing an IconGlyph.
  *
  * Encapsulates the glyph’s identity, Unicode code point,
  * and vector outline path.
  */
-export type IconFontGlyphOptions = {
+export type IconGlyphOptions = {
   /** Human‑readable name of the glyph (used in CSS class names). */
   name: string;
   /** Unicode code point assigned to this glyph. */
