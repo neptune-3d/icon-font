@@ -1,5 +1,5 @@
 {
-  "name": "@neptune3d/icon-font-builder",
+  "name": "@neptune3d/icon-font",
   "version": "0.0.1",
   "description": "Library for creating icon fonts with composition.",
   "keywords": [
@@ -8,13 +8,13 @@
   ],
   "type": "module",
   "license": "MIT",
-  "homepage": "https://github.com/neptune-3d/icon-font-builder#readme",
+  "homepage": "https://github.com/neptune-3d/icon-font#readme",
   "bugs": {
-    "url": "https://github.com/neptune-3d/icon-font-builder/issues"
+    "url": "https://github.com/neptune-3d/icon-font/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/neptune-3d/icon-font-builder.git"
+    "url": "git+https://github.com/neptune-3d/icon-font.git"
   },
   "author": "Dusan Jovanov <jovanovdusan1@gmail.com>",
   "files": [
