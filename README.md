@@ -55,7 +55,7 @@ await Promise.all([
   writeFile(`../public/${myIconFont.familyName}.woff2`, myIconFont.toWoff2()),
   writeFile(
     "../src/icons.css",
-    neptuneFont.toCss(`/${neptuneFont.familyName}.woff2`)
+    myIconFont.toCss(`/${myIconFont.familyName}.woff2`)
   ),
 ]);
 
