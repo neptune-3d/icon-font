@@ -5,7 +5,7 @@ Library for creating icon fonts with composition.
 [![NPM Version](https://img.shields.io/npm/v/%40neptune3d%2Ficon-font)](https://www.npmjs.com/package/@neptune3d/icon-font)
 
 ```bash
-npm install neptune3d/icon-font
+npm install @neptune3d/icon-font
 ```
 
 ## Example
