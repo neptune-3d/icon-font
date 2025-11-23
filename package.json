@@ -1,0 +1,51 @@
+{
+  "name": "@neptune3d/icon-font-builder",
+  "version": "0.0.1",
+  "description": "Library for creating icon fonts with composition.",
+  "keywords": [
+    "icon",
+    "font"
+  ],
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/neptune-3d/icon-font-builder#readme",
+  "bugs": {
+    "url": "https://github.com/neptune-3d/icon-font-builder/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neptune-3d/icon-font-builder.git"
+  },
+  "author": "Dusan Jovanov <jovanovdusan1@gmail.com>",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "bumpp": "^10.3.1",
+    "prettier": "2.8",
+    "tsdown": "^0.15.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@types/opentype.js": "^1.3.8",
+    "@types/ttf2woff": "^2.0.4",
+    "opentype.js": "^1.3.4",
+    "ttf2woff": "^3.0.0",
+    "ttf2woff2": "^8.0.0"
+  }
+}
