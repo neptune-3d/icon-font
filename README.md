@@ -8,6 +8,8 @@ Library for creating icon fonts with composition.
 npm install @neptune3d/icon-font
 ```
 
+> ℹ️ Note: When installing you might get an error like this: `error: install script from "ttf2woff2" exited with 1` - just run install again and it should work.
+
 ## Example
 
 ```ts
