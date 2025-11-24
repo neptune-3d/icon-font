@@ -37,7 +37,7 @@ const textLinesPath = IconPath.merge([
   textLinePath.clone().translate(4, 8),
   textLinePath.clone().translate(4, 12),
   textLinePath.clone().translate(4, 16),
-]).center({ maxX: 24, maxY: 19 }); // centered in the bounding box of the text file path
+]).center(0, 0, 24, 19); // centered in the bounding box of the text file path
 
 // create the font
 const myIconFont = new IconFont({

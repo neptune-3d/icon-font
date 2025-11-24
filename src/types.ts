@@ -71,13 +71,6 @@ export type IconPathBounds = {
 
 export type Point = { x: number; y: number };
 
-export type ScaleFactor = {
-  /** horizontal scale factor */
-  x: number;
-  /** optional vertical scale factor (defaults to x) */
-  y?: number;
-};
-
 export type Rect = {
   x: number;
   y: number;

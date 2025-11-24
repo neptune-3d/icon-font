@@ -7,7 +7,6 @@ import type {
   OpenTypeCommand,
   Point,
   Rect,
-  ScaleFactor,
 } from "./types";
 
 /**
@@ -503,64 +502,24 @@ export class IconPath {
   /**
    * Scale all commands in this path in place.
    *
-   * This mutates the current IconPath by multiplying all coordinates
-   * by the given scale factors. If only `x` is provided, both axes
-   * are scaled uniformly. Returns `this` for chaining.
+   * Multiplies all coordinates by the given scale factors.
+   * If only `sx` is provided, both axes are scaled uniformly.
+   * Scaling is performed around the given center point (cx, cy).
+   * Defaults to the origin (0,0) if not provided.
+   * Returns `this` for chaining.
    *
-   * @param factor ScaleFactor object with { x, y? }
-   * @returns      The IconPath instance for chaining
+   * @param sx Scale factor for x axis
+   * @param sy Optional scale factor for y axis (defaults to sx)
+   * @param cx Optional center x (default 0)
+   * @param cy Optional center y (default 0)
+   * @returns  The IconPath instance for chaining
    */
-  scale(factor: ScaleFactor): IconPath {
-    const sx = factor.x;
-    const sy = factor.y ?? factor.x;
-
-    this._commands = this._commands.map((cmd) => {
-      switch (cmd.type) {
-        case "M":
-        case "L":
-        case "T":
-          return { type: cmd.type, x: cmd.x * sx, y: cmd.y * sy };
-
-        case "H":
-          return { type: "H", x: cmd.x * sx };
-
-        case "V":
-          return { type: "V", y: cmd.y * sy };
-
-        case "Q":
-          return {
-            type: "Q",
-            x1: cmd.x1 * sx,
-            y1: cmd.y1 * sy,
-            x: cmd.x * sx,
-            y: cmd.y * sy,
-          };
-
-        case "C":
-          return {
-            type: "C",
-            x1: cmd.x1 * sx,
-            y1: cmd.y1 * sy,
-            x2: cmd.x2 * sx,
-            y2: cmd.y2 * sy,
-            x: cmd.x * sx,
-            y: cmd.y * sy,
-          };
-
-        case "S":
-          return {
-            type: "S",
-            x2: cmd.x2 * sx,
-            y2: cmd.y2 * sy,
-            x: cmd.x * sx,
-            y: cmd.y * sy,
-          };
-
-        case "Z":
-          return { type: "Z" };
-      }
+  scale(sx: number, sy: number = sx, cx: number = 0, cy: number = 0): IconPath {
+    this._mapCoords((x, y) => {
+      const dx = x - cx;
+      const dy = y - cy;
+      return { x: dx * sx + cx, y: dy * sy + cy };
     });
-
     return this;
   }
 
@@ -578,54 +537,130 @@ export class IconPath {
    * @returns The IconPath instance for chaining
    */
   translate(dx: number, dy: number): IconPath {
+    this._mapCoords((x, y) => ({ x: x + dx, y: y + dy }));
+    return this;
+  }
+
+  /**
+   * Rotate the path around a given center.
+   *
+   * @param angle Rotation angle in radians
+   * @param cx    Optional center x (default 0)
+   * @param cy    Optional center y (default 0)
+   * @returns The IconPath instance for chaining
+   */
+  rotate(angle: number, cx: number = 0, cy: number = 0): IconPath {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    this._mapCoords((x, y) => {
+      // translate to origin
+      const dx = x - cx;
+      const dy = y - cy;
+      // rotate
+      const rx = dx * cos - dy * sin;
+      const ry = dx * sin + dy * cos;
+      // translate back
+      return { x: rx + cx, y: ry + cy };
+    });
+
+    return this;
+  }
+
+  /**
+   * Rotate the path around a given center, using degrees.
+   *
+   * @param angleDeg Rotation angle in degrees
+   * @param cx       Optional center x (default 0)
+   * @param cy       Optional center y (default 0)
+   * @returns The IconPath instance for chaining
+   */
+  rotateDeg(angleDeg: number, cx: number = 0, cy: number = 0): IconPath {
+    const angleRad = (Math.PI / 180) * angleDeg;
+    return this.rotate(angleRad, cx, cy);
+  }
+
+  /**
+   * Flip the path horizontally (mirror across a vertical axis).
+   *
+   * Each command’s x coordinate is remapped as (width - x).
+   * Control points are also flipped. Vertical-only commands (V) remain unchanged.
+   *
+   * @param width Optional width of the design space to flip within.
+   *              Defaults to this.size if not provided.
+   * @returns The IconPath instance for chaining
+   */
+  flipX(width: number = this.size): IconPath {
+    this._mapCoords((x, y) => ({ x: width - x, y }));
+    return this;
+  }
+
+  /**
+   * Flip the path vertically (mirror across a horizontal axis).
+   *
+   * Each command’s y coordinate is remapped as (height - y).
+   * Control points are also flipped. Horizontal-only commands (H) remain unchanged.
+   *
+   * @param height Optional height of the design space to flip within.
+   *               Defaults to this.size if not provided.
+   * @returns The IconPath instance for chaining
+   */
+  flipY(height: number = this.size): IconPath {
+    this._mapCoords((x, y) => ({ x, y: height - y }));
+    return this;
+  }
+
+  /**
+   * Apply a coordinate transform function to all commands.
+   *
+   * The transform function receives (x,y) and returns a new {x,y}.
+   * Each command type is remapped accordingly.
+   */
+  private _mapCoords(fn: (x: number, y: number) => Point): void {
     this._commands = this._commands.map((cmd) => {
       switch (cmd.type) {
         case "M":
         case "L":
-        case "T":
-          return { type: cmd.type, x: cmd.x + dx, y: cmd.y + dy };
-
-        case "H":
-          return { type: "H", x: cmd.x + dx };
-
-        case "V":
-          return { type: "V", y: cmd.y + dy };
-
-        case "Q":
-          return {
-            type: "Q",
-            x1: cmd.x1 + dx,
-            y1: cmd.y1 + dy,
-            x: cmd.x + dx,
-            y: cmd.y + dy,
-          };
-
-        case "C":
+        case "T": {
+          const p = fn(cmd.x, cmd.y);
+          return { type: cmd.type, x: p.x, y: p.y };
+        }
+        case "H": {
+          const p = fn(cmd.x, 0); // only x matters
+          return { type: "H", x: p.x };
+        }
+        case "V": {
+          const p = fn(0, cmd.y); // only y matters
+          return { type: "V", y: p.y };
+        }
+        case "Q": {
+          const c = fn(cmd.x1, cmd.y1);
+          const p = fn(cmd.x, cmd.y);
+          return { type: "Q", x1: c.x, y1: c.y, x: p.x, y: p.y };
+        }
+        case "C": {
+          const c1 = fn(cmd.x1, cmd.y1);
+          const c2 = fn(cmd.x2, cmd.y2);
+          const p = fn(cmd.x, cmd.y);
           return {
             type: "C",
-            x1: cmd.x1 + dx,
-            y1: cmd.y1 + dy,
-            x2: cmd.x2 + dx,
-            y2: cmd.y2 + dy,
-            x: cmd.x + dx,
-            y: cmd.y + dy,
+            x1: c1.x,
+            y1: c1.y,
+            x2: c2.x,
+            y2: c2.y,
+            x: p.x,
+            y: p.y,
           };
-
-        case "S":
-          return {
-            type: "S",
-            x2: cmd.x2 + dx,
-            y2: cmd.y2 + dy,
-            x: cmd.x + dx,
-            y: cmd.y + dy,
-          };
-
+        }
+        case "S": {
+          const c2 = fn(cmd.x2, cmd.y2);
+          const p = fn(cmd.x, cmd.y);
+          return { type: "S", x2: c2.x, y2: c2.y, x: p.x, y: p.y };
+        }
         case "Z":
           return { type: "Z" };
       }
     });
-
-    return this;
   }
 
   /**
@@ -634,26 +669,26 @@ export class IconPath {
    * Computes the bounding box of the current path commands and translates
    * the path so that its shape is centered within the specified target box.
    *
-   * - If `targetBounds` is omitted, the default box is (0,0) → (size,size).
-   * - `targetBounds` may be partial: any missing values fall back to the defaults.
+   * - If parameters are omitted, the default box is (0,0) → (size,size).
    * - This allows centering inside arbitrary rectangles, including offset boxes,
    *   enabling both centering and translation in one step.
    *
-   * @param targetBounds Optional partial bounding box { minX, minY, maxX, maxY }.
-   *                     Defaults to { minX:0, minY:0, maxX:size, maxY:size }.
+   * @param minX Minimum x of target box (default 0)
+   * @param minY Minimum y of target box (default 0)
+   * @param maxX Maximum x of target box (default this._size)
+   * @param maxY Maximum y of target box (default this._size)
    * @returns The IconPath instance for chaining
    */
-  center(targetBounds?: Partial<IconPathBounds>): IconPath {
+  center(
+    minX: number = 0,
+    minY: number = 0,
+    maxX: number = this._size,
+    maxY: number = this._size
+  ): IconPath {
     const bounds = this.getCommandBounds();
 
     const shapeWidth = bounds.maxX - bounds.minX;
     const shapeHeight = bounds.maxY - bounds.minY;
-
-    // Default target box is (0,0) to (size,size)
-    const minX = targetBounds?.minX ?? 0;
-    const minY = targetBounds?.minY ?? 0;
-    const maxX = targetBounds?.maxX ?? this._size;
-    const maxY = targetBounds?.maxY ?? this._size;
 
     const targetWidth = maxX - minX;
     const targetHeight = maxY - minY;
@@ -710,6 +745,38 @@ export class IconPath {
    */
   getCanvasBounds(): IconPathBounds {
     return { minX: 0, minY: 0, maxX: this._size, maxY: this._size };
+  }
+
+  /**
+   * Return the geometric center of the drawn commands.
+   *
+   * This computes the midpoint of the axis-aligned bounding box
+   * enclosing all path commands.
+   *
+   * @returns { x, y } center of the command bounds
+   */
+  getCommandsCenter(): Point {
+    const bounds = this.getCommandBounds();
+    return {
+      x: (bounds.minX + bounds.maxX) / 2,
+      y: (bounds.minY + bounds.maxY) / 2,
+    };
+  }
+
+  /**
+   * Return the geometric center of the canvas box.
+   *
+   * This is simply the midpoint of the full design-space rectangle
+   * (0,0) to (size,size).
+   *
+   * @returns { x, y } center of the canvas
+   */
+  getCanvasCenter(): Point {
+    const bounds = this.getCanvasBounds();
+    return {
+      x: (bounds.minX + bounds.maxX) / 2,
+      y: (bounds.minY + bounds.maxY) / 2,
+    };
   }
 
   /**
@@ -1648,6 +1715,41 @@ export class IconPath {
     }
 
     return path;
+  }
+
+  /**
+   * Convert all stored commands into an SVG path `d` attribute string.
+   *
+   * Iterates over the internal command list and serializes each one
+   * into its corresponding SVG syntax. Coordinates are joined with spaces.
+   *
+   * @returns SVG path data string
+   */
+  toPathData(): string {
+    return this._commands
+      .map((cmd) => {
+        switch (cmd.type) {
+          case "M":
+          case "L":
+          case "T":
+            return `${cmd.type} ${cmd.x} ${cmd.y}`;
+          case "H":
+            return `H ${cmd.x}`;
+          case "V":
+            return `V ${cmd.y}`;
+          case "Q":
+            return `Q ${cmd.x1} ${cmd.y1} ${cmd.x} ${cmd.y}`;
+          case "C":
+            return `C ${cmd.x1} ${cmd.y1} ${cmd.x2} ${cmd.y2} ${cmd.x} ${cmd.y}`;
+          case "S":
+            return `S ${cmd.x2} ${cmd.y2} ${cmd.x} ${cmd.y}`;
+          case "Z":
+            return "Z";
+          default:
+            return "";
+        }
+      })
+      .join(" ");
   }
 
   /**
