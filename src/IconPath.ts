@@ -418,13 +418,8 @@ export class IconPath {
     x: number,
     y: number
   ): IconPath {
-    // Current point: last command’s endpoint
-    const [x0, y0] = this._commands.length
-      ? (() => {
-          const last = this._commands[this._commands.length - 1];
-          return "x" in last && "y" in last ? [last.x, last.y] : [0, 0];
-        })()
-      : [0, 0];
+    // Use helper to get current point
+    const { x: x0, y: y0 } = this.getCurrentPoint();
 
     // Convert arc to cubic segments
     const beziers: CubicCommand[] = this.arcToCubic(
@@ -995,8 +990,20 @@ export class IconPath {
     // Degenerate: same point -> nothing to draw
     if (x0 === x && y0 === y) return [];
 
-    // Degenerate: zero radii -> spec says straight line
-    if (rx === 0 || ry === 0) return [];
+    // Degenerate: zero radii -> straight line
+    if (rx === 0 || ry === 0) {
+      return [
+        {
+          type: "C",
+          x1: x0,
+          y1: y0,
+          x2: x,
+          y2: y,
+          x,
+          y,
+        },
+      ];
+    }
 
     // Rotation in radians
     const phi = (Math.PI / 180) * xAxisRotation;
@@ -1019,15 +1026,13 @@ export class IconPath {
       ry *= scale;
     }
 
-    // Step 2: center calculation
+    // Step 2: center calculation in ellipse space
     const rxSq = rx * rx;
     const rySq = ry * ry;
     const x1pSq = x1p * x1p;
     const y1pSq = y1p * y1p;
 
     let radicant = rxSq * rySq - rxSq * y1pSq - rySq * x1pSq;
-
-    // Numeric stability
     if (radicant < 0) radicant = 0;
 
     radicant /= rxSq * y1pSq + rySq * x1pSq;
@@ -1036,7 +1041,7 @@ export class IconPath {
     const cxp = (radicant * rx * y1p) / ry;
     const cyp = (radicant * -ry * x1p) / rx;
 
-    // Step 3: transform center back
+    // Step 3: transform center back to original coords
     const cx = cosPhi * cxp - sinPhi * cyp + (x0 + x) / 2;
     const cy = sinPhi * cxp + cosPhi * cyp + (y0 + y) / 2;
 
@@ -1044,7 +1049,6 @@ export class IconPath {
     const unitAngle = (ux: number, uy: number, vx: number, vy: number) => {
       const sign = ux * vy - uy * vx < 0 ? -1 : 1;
       let dot = ux * vx + uy * vy;
-      // Clamp dot for numeric stability
       if (dot > 1) dot = 1;
       if (dot < -1) dot = -1;
       return sign * Math.acos(dot);
@@ -1062,7 +1066,10 @@ export class IconPath {
     if (sweepFlag === 1 && deltaTheta < 0) deltaTheta += Math.PI * 2;
 
     // Segment splitting (<= 90° each)
-    let segments = Math.max(Math.ceil(Math.abs(deltaTheta) / (Math.PI / 2)), 1);
+    const segments = Math.max(
+      Math.ceil(Math.abs(deltaTheta) / (Math.PI / 2)),
+      1
+    );
     const dTheta = deltaTheta / segments;
 
     const result: CubicCommand[] = [];
@@ -1071,24 +1078,22 @@ export class IconPath {
       const t1 = theta1;
       const t2 = t1 + dTheta;
 
-      // Points on ellipse
       const cosT1 = Math.cos(t1);
       const sinT1 = Math.sin(t1);
       const cosT2 = Math.cos(t2);
       const sinT2 = Math.sin(t2);
 
       // Position on rotated/scaled ellipse
-      const p1x = cx + rx * (cosPhi * cosT1 - sinPhi * sinT1);
-      const p1y = cy + ry * (sinPhi * cosT1 + cosPhi * sinT1);
-      const p2x = cx + rx * (cosPhi * cosT2 - sinPhi * sinT2);
-      const p2y = cy + ry * (sinPhi * cosT2 + cosPhi * sinT2);
+      const p1x = cx + rx * (cosPhi * cosT1) - ry * (sinPhi * sinT1);
+      const p1y = cy + rx * (sinPhi * cosT1) + ry * (cosPhi * sinT1);
+      const p2x = cx + rx * (cosPhi * cosT2) - ry * (sinPhi * sinT2);
+      const p2y = cy + rx * (sinPhi * cosT2) + ry * (cosPhi * sinT2);
 
-      // Derivative vector (rotated) at t:
-      // d/dt [ R * rot * [cos t; sin t] ] = R * rot * [-sin t; cos t]
-      const d1x = rx * (cosPhi * -sinT1) - ry * (sinPhi * cosT1);
-      const d1y = rx * (sinPhi * -sinT1) + ry * (cosPhi * cosT1);
-      const d2x = rx * (cosPhi * -sinT2) - ry * (sinPhi * cosT2);
-      const d2y = rx * (sinPhi * -sinT2) + ry * (cosPhi * cosT2);
+      // Derivative vectors (R * rot * [-sin t, cos t])
+      const d1x = -rx * cosPhi * sinT1 - ry * sinPhi * cosT1;
+      const d1y = -rx * sinPhi * sinT1 + ry * cosPhi * cosT1;
+      const d2x = -rx * cosPhi * sinT2 - ry * sinPhi * cosT2;
+      const d2y = -rx * sinPhi * sinT2 + ry * cosPhi * cosT2;
 
       // Control points using alpha
       const alpha = (4 / 3) * Math.tan((t2 - t1) / 4);
@@ -1108,11 +1113,84 @@ export class IconPath {
         y: p2y,
       });
 
-      // Advance
       theta1 = t2;
     }
 
     return result;
+  }
+
+  /**
+   * Returns the current drawing point of the path.
+   *
+   * Iterates through all recorded commands and determines the latest
+   * endpoint coordinates, taking into account special cases:
+   * - `M` sets a new subpath start and current point.
+   * - `L`, `T`, `Q`, `C`, `S` update both x and y to their endpoint.
+   * - `H` updates only the x coordinate.
+   * - `V` updates only the y coordinate.
+   * - `Z` closes the subpath and resets the current point to the last `M`.
+   *
+   * If no commands exist, the origin `{ x: 0, y: 0 }` is returned.
+   *
+   * This method is safe to expose publicly, as it provides a convenient way
+   * to query the current pen position for building or inspecting paths.
+   */
+  getCurrentPoint(): Point {
+    if (this._commands.length === 0) {
+      return { x: 0, y: 0 };
+    }
+
+    let x = 0;
+    let y = 0;
+    let subpathStartX = 0;
+    let subpathStartY = 0;
+
+    for (const cmd of this._commands) {
+      switch (cmd.type) {
+        case "M":
+          x = cmd.x;
+          y = cmd.y;
+          subpathStartX = x;
+          subpathStartY = y;
+          break;
+
+        case "L":
+        case "T":
+          x = cmd.x;
+          y = cmd.y;
+          break;
+
+        case "H":
+          x = cmd.x;
+          break;
+
+        case "V":
+          y = cmd.y;
+          break;
+
+        case "Q":
+          x = cmd.x;
+          y = cmd.y;
+          break;
+
+        case "C":
+          x = cmd.x;
+          y = cmd.y;
+          break;
+
+        case "S":
+          x = cmd.x;
+          y = cmd.y;
+          break;
+
+        case "Z":
+          x = subpathStartX;
+          y = subpathStartY;
+          break;
+      }
+    }
+
+    return { x, y };
   }
 
   /**
