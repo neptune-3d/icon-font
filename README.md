@@ -69,7 +69,7 @@ import "./icons.css";
 
 ## Browser support
 
-When using this library in the browser ( e.g. for previewing the font in the canvas ) with `vite`, you might get a console error like this:
+When using this library in the browser with `vite` ( e.g. for previewing the font in the canvas ), you might get a console error like this:
 
 ```
 Uncaught sync fetching of the wasm failed: you can preload it to Module["wasmBinary"] manually, or emcc.py will do that for you when generating HTML (but not JS)
@@ -96,3 +96,5 @@ export default defineConfig({
   },
 });
 ```
+
+Of course, this means you won't be able to use the `ttf2woff2` features ( `IconFont.toWoff2()` ) in the browser, but you probably don't need it in the browser anyway.
