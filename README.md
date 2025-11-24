@@ -66,3 +66,33 @@ import "./icons.css";
 
 <div class="mi mi-text-file" style="font-size: 24px; color: #fff;"></div>;
 ```
+
+## Browser support
+
+When using this library in the browser ( e.g. for previewing the font in the canvas ) with `vite`, you might get a console error like this:
+
+```
+Uncaught sync fetching of the wasm failed: you can preload it to Module["wasmBinary"] manually, or emcc.py will do that for you when generating HTML (but not JS)
+```
+
+The error comes from the `ttf2woff2` dependency of this package and you solve it by stubbing out the ttf2woff2 module:
+
+```ts
+// create a stub file src/ttf2woff2-stub.js:
+export default {};
+
+// and have these fields in the vite config:
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      ttf2woff2: "./src/ttf2woff2-stub.js",
+    },
+  },
+  optimizeDeps: {
+    force: true,
+    include: ["@neptune3d/icon-font"],
+  },
+});
+```
