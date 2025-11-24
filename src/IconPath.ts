@@ -1,6 +1,7 @@
 import { Path } from "opentype.js";
 import type {
   Corner,
+  CubicCommand,
   IconPathBounds,
   IconPathCommand,
   OpenTypeCommand,
@@ -390,6 +391,102 @@ export class IconPath {
     }
 
     return this.s(x2, y2, x, y);
+  }
+
+  /**
+   * Draw an elliptical arc from the current point to (x, y).
+   *
+   * Converts the arc into cubic Bézier segments using arcToCubic(),
+   * and immediately inserts those `C` commands into the path.
+   * This ensures only OpenType-compatible commands are stored.
+   *
+   * @param rx            X radius of the ellipse
+   * @param ry            Y radius of the ellipse
+   * @param xAxisRotation Rotation of the ellipse’s x-axis in degrees
+   * @param largeArcFlag  0 = smaller arc, 1 = larger arc
+   * @param sweepFlag     0 = counter-clockwise, 1 = clockwise
+   * @param x             X coordinate of the arc endpoint
+   * @param y             Y coordinate of the arc endpoint
+   * @returns             The IconPath instance for chaining
+   */
+  a(
+    rx: number,
+    ry: number,
+    xAxisRotation: number,
+    largeArcFlag: 0 | 1,
+    sweepFlag: 0 | 1,
+    x: number,
+    y: number
+  ): IconPath {
+    // Current point: last command’s endpoint
+    const [x0, y0] = this._commands.length
+      ? (() => {
+          const last = this._commands[this._commands.length - 1];
+          return "x" in last && "y" in last ? [last.x, last.y] : [0, 0];
+        })()
+      : [0, 0];
+
+    // Convert arc to cubic segments
+    const beziers: CubicCommand[] = this.arcToCubic(
+      x0,
+      y0,
+      rx,
+      ry,
+      xAxisRotation,
+      largeArcFlag,
+      sweepFlag,
+      x,
+      y
+    );
+
+    // Push each cubic segment into commands
+    for (const seg of beziers) {
+      this._commands.push(seg);
+    }
+
+    return this;
+  }
+
+  /**
+   * Draw an elliptical arc from a string of parameters, as found in
+   * an SVG path `d` attribute after a lowercase `a` command.
+   *
+   * Example: "2 2 0 1 0 14 14" or "2,2,0,1,0,14,14"
+   *
+   * Convenience wrapper around `a(rx, ry, xAxisRotation, largeArcFlag, sweepFlag, x, y)`.
+   * The string is normalized by replacing commas with spaces, then split into
+   * seven parts. Each part is parsed into a float or integer flag.
+   *
+   * @param params A string containing seven numeric values ("rx ry xAxisRotation largeArcFlag sweepFlag x y")
+   * @returns      The IconPath instance for chaining
+   * @throws       Error if the string is malformed or contains invalid numbers
+   */
+  as(params: string): IconPath {
+    const parts = params.trim().replace(COMMA_REGEX, " ").split(SPACE_REGEX);
+
+    if (parts.length !== 7) {
+      throw new Error(`Invalid parameter string for A: "${params}"`);
+    }
+
+    const [rxStr, ryStr, rotStr, largeStr, sweepStr, xStr, yStr] = parts;
+
+    const rx = parseFloat(rxStr!);
+    const ry = parseFloat(ryStr!);
+    const xAxisRotation = parseFloat(rotStr!);
+    const largeArcFlag = parseInt(largeStr!, 10) as 0 | 1;
+    const sweepFlag = parseInt(sweepStr!, 10) as 0 | 1;
+    const x = parseFloat(xStr!);
+    const y = parseFloat(yStr!);
+
+    if (
+      [rx, ry, xAxisRotation, x, y].some((n) => isNaN(n)) ||
+      ![0, 1].includes(largeArcFlag) ||
+      ![0, 1].includes(sweepFlag)
+    ) {
+      throw new Error(`Invalid numeric values in A string: "${params}"`);
+    }
+
+    return this.a(rx, ry, xAxisRotation, largeArcFlag, sweepFlag, x, y);
   }
 
   /**
@@ -865,6 +962,142 @@ export class IconPath {
    */
   circle(cx: number, cy: number, r: number): IconPath {
     return this.ellipse(cx, cy, r, r);
+  }
+
+  /**
+   * Convert an SVG elliptical arc into one or more cubic Bézier segments.
+   *
+   * Implements the algorithm from the SVG spec:
+   * https://www.w3.org/TR/SVG/implnote.html#ArcImplementationNotes
+   *
+   * @param x0 Starting x coordinate (current point)
+   * @param y0 Starting y coordinate (current point)
+   * @param rx X radius of the ellipse
+   * @param ry Y radius of the ellipse
+   * @param xAxisRotation Rotation of the ellipse’s x-axis in degrees
+   * @param largeArcFlag 0 = smaller arc, 1 = larger arc
+   * @param sweepFlag    0 = counter-clockwise, 1 = clockwise
+   * @param x End x coordinate
+   * @param y End y coordinate
+   * @returns Array of cubic Bézier segments (CubicCommand[])
+   */
+  arcToCubic(
+    x0: number,
+    y0: number,
+    rx: number,
+    ry: number,
+    xAxisRotation: number,
+    largeArcFlag: 0 | 1,
+    sweepFlag: 0 | 1,
+    x: number,
+    y: number
+  ): CubicCommand[] {
+    const rad = (Math.PI / 180) * xAxisRotation;
+    const cosRad = Math.cos(rad);
+    const sinRad = Math.sin(rad);
+
+    // Step 1: transform to ellipse space
+    const dx2 = (x0 - x) / 2;
+    const dy2 = (y0 - y) / 2;
+    let x1p = cosRad * dx2 + sinRad * dy2;
+    let y1p = -sinRad * dx2 + cosRad * dy2;
+
+    // Correct radii
+    let rxAbs = Math.abs(rx);
+    let ryAbs = Math.abs(ry);
+    const lambda =
+      (x1p * x1p) / (rxAbs * rxAbs) + (y1p * y1p) / (ryAbs * ryAbs);
+    if (lambda > 1) {
+      const scale = Math.sqrt(lambda);
+      rxAbs *= scale;
+      ryAbs *= scale;
+    }
+
+    // Step 2: center calculation
+    const sign = largeArcFlag === sweepFlag ? -1 : 1;
+    const rxSq = rxAbs * rxAbs;
+    const rySq = ryAbs * ryAbs;
+    const x1pSq = x1p * x1p;
+    const y1pSq = y1p * y1p;
+
+    const factor =
+      sign *
+      Math.sqrt(
+        Math.max(
+          0,
+          (rxSq * rySq - rxSq * y1pSq - rySq * x1pSq) /
+            (rxSq * y1pSq + rySq * x1pSq)
+        )
+      );
+
+    const cxp = (factor * rxAbs * y1p) / ryAbs;
+    const cyp = (-factor * ryAbs * x1p) / rxAbs;
+
+    // Step 3: center in original coords
+    const cx = cosRad * cxp - sinRad * cyp + (x0 + x) / 2;
+    const cy = sinRad * cxp + cosRad * cyp + (y0 + y) / 2;
+
+    // Step 4: angles
+    const vectorAngle = (ux: number, uy: number, vx: number, vy: number) => {
+      const dot = ux * vx + uy * vy;
+      const len = Math.sqrt(ux * ux + uy * uy) * Math.sqrt(vx * vx + vy * vy);
+      let ang = Math.acos(Math.min(Math.max(dot / len, -1), 1));
+      if (ux * vy - uy * vx < 0) ang = -ang;
+      return ang;
+    };
+
+    const theta1 = vectorAngle(1, 0, (x1p - cxp) / rxAbs, (y1p - cyp) / ryAbs);
+    let deltaTheta = vectorAngle(
+      (x1p - cxp) / rxAbs,
+      (y1p - cyp) / ryAbs,
+      (-x1p - cxp) / rxAbs,
+      (-y1p - cyp) / ryAbs
+    );
+
+    if (!sweepFlag && deltaTheta > 0) deltaTheta -= 2 * Math.PI;
+    else if (sweepFlag && deltaTheta < 0) deltaTheta += 2 * Math.PI;
+
+    // Split into segments
+    const segments = Math.ceil(Math.abs(deltaTheta / (Math.PI / 2)));
+    const delta = deltaTheta / segments;
+
+    const result: CubicCommand[] = [];
+
+    for (let i = 0; i < segments; i++) {
+      const t1 = theta1 + i * delta;
+      const t2 = t1 + delta;
+
+      const cosT1 = Math.cos(t1);
+      const sinT1 = Math.sin(t1);
+      const cosT2 = Math.cos(t2);
+      const sinT2 = Math.sin(t2);
+
+      // Endpoints
+      const e1x = cx + rxAbs * (cosRad * cosT1 - sinRad * sinT1);
+      const e1y = cy + ryAbs * (sinRad * cosT1 + cosRad * sinT1);
+      const e2x = cx + rxAbs * (cosRad * cosT2 - sinRad * sinT2);
+      const e2y = cy + ryAbs * (sinRad * cosT2 + cosRad * sinT2);
+
+      // Derivatives for control points
+      const alpha = (4 / 3) * Math.tan((t2 - t1) / 4);
+
+      const c1x = e1x - alpha * (rxAbs * (cosRad * sinT1 + sinRad * cosT1));
+      const c1y = e1y - alpha * (ryAbs * (sinRad * sinT1 - cosRad * cosT1));
+      const c2x = e2x + alpha * (rxAbs * (cosRad * sinT2 + sinRad * cosT2));
+      const c2y = e2y + alpha * (ryAbs * (sinRad * sinT2 - cosRad * cosT2));
+
+      result.push({
+        type: "C",
+        x1: c1x,
+        y1: c1y,
+        x2: c2x,
+        y2: c2y,
+        x: e2x,
+        y: e2y,
+      });
+    }
+
+    return result;
   }
 
   /**
