@@ -992,99 +992,111 @@ export class IconPath {
     x: number,
     y: number
   ): CubicCommand[] {
-    const rad = (Math.PI / 180) * xAxisRotation;
-    const cosRad = Math.cos(rad);
-    const sinRad = Math.sin(rad);
+    // Degenerate: same point -> nothing to draw
+    if (x0 === x && y0 === y) return [];
+
+    // Degenerate: zero radii -> spec says straight line
+    if (rx === 0 || ry === 0) return [];
+
+    // Rotation in radians
+    const phi = (Math.PI / 180) * xAxisRotation;
+    const cosPhi = Math.cos(phi);
+    const sinPhi = Math.sin(phi);
 
     // Step 1: transform to ellipse space
     const dx2 = (x0 - x) / 2;
     const dy2 = (y0 - y) / 2;
-    let x1p = cosRad * dx2 + sinRad * dy2;
-    let y1p = -sinRad * dx2 + cosRad * dy2;
+    let x1p = cosPhi * dx2 + sinPhi * dy2;
+    let y1p = -sinPhi * dx2 + cosPhi * dy2;
 
-    // Correct radii
-    let rxAbs = Math.abs(rx);
-    let ryAbs = Math.abs(ry);
-    const lambda =
-      (x1p * x1p) / (rxAbs * rxAbs) + (y1p * y1p) / (ryAbs * ryAbs);
+    // Compensate out-of-range radii
+    rx = Math.abs(rx);
+    ry = Math.abs(ry);
+    const lambda = (x1p * x1p) / (rx * rx) + (y1p * y1p) / (ry * ry);
     if (lambda > 1) {
       const scale = Math.sqrt(lambda);
-      rxAbs *= scale;
-      ryAbs *= scale;
+      rx *= scale;
+      ry *= scale;
     }
 
     // Step 2: center calculation
-    const sign = largeArcFlag === sweepFlag ? -1 : 1;
-    const rxSq = rxAbs * rxAbs;
-    const rySq = ryAbs * ryAbs;
+    const rxSq = rx * rx;
+    const rySq = ry * ry;
     const x1pSq = x1p * x1p;
     const y1pSq = y1p * y1p;
 
-    const factor =
-      sign *
-      Math.sqrt(
-        Math.max(
-          0,
-          (rxSq * rySq - rxSq * y1pSq - rySq * x1pSq) /
-            (rxSq * y1pSq + rySq * x1pSq)
-        )
-      );
+    let radicant = rxSq * rySq - rxSq * y1pSq - rySq * x1pSq;
 
-    const cxp = (factor * rxAbs * y1p) / ryAbs;
-    const cyp = (-factor * ryAbs * x1p) / rxAbs;
+    // Numeric stability
+    if (radicant < 0) radicant = 0;
 
-    // Step 3: center in original coords
-    const cx = cosRad * cxp - sinRad * cyp + (x0 + x) / 2;
-    const cy = sinRad * cxp + cosRad * cyp + (y0 + y) / 2;
+    radicant /= rxSq * y1pSq + rySq * x1pSq;
+    radicant = Math.sqrt(radicant) * (largeArcFlag === sweepFlag ? -1 : 1);
+
+    const cxp = (radicant * rx * y1p) / ry;
+    const cyp = (radicant * -ry * x1p) / rx;
+
+    // Step 3: transform center back
+    const cx = cosPhi * cxp - sinPhi * cyp + (x0 + x) / 2;
+    const cy = sinPhi * cxp + cosPhi * cyp + (y0 + y) / 2;
 
     // Step 4: angles
-    const vectorAngle = (ux: number, uy: number, vx: number, vy: number) => {
-      const dot = ux * vx + uy * vy;
-      const len = Math.sqrt(ux * ux + uy * uy) * Math.sqrt(vx * vx + vy * vy);
-      let ang = Math.acos(Math.min(Math.max(dot / len, -1), 1));
-      if (ux * vy - uy * vx < 0) ang = -ang;
-      return ang;
+    const unitAngle = (ux: number, uy: number, vx: number, vy: number) => {
+      const sign = ux * vy - uy * vx < 0 ? -1 : 1;
+      let dot = ux * vx + uy * vy;
+      // Clamp dot for numeric stability
+      if (dot > 1) dot = 1;
+      if (dot < -1) dot = -1;
+      return sign * Math.acos(dot);
     };
 
-    const theta1 = vectorAngle(1, 0, (x1p - cxp) / rxAbs, (y1p - cyp) / ryAbs);
-    let deltaTheta = vectorAngle(
-      (x1p - cxp) / rxAbs,
-      (y1p - cyp) / ryAbs,
-      (-x1p - cxp) / rxAbs,
-      (-y1p - cyp) / ryAbs
-    );
+    const v1x = (x1p - cxp) / rx;
+    const v1y = (y1p - cyp) / ry;
+    const v2x = (-x1p - cxp) / rx;
+    const v2y = (-y1p - cyp) / ry;
 
-    if (!sweepFlag && deltaTheta > 0) deltaTheta -= 2 * Math.PI;
-    else if (sweepFlag && deltaTheta < 0) deltaTheta += 2 * Math.PI;
+    let theta1 = unitAngle(1, 0, v1x, v1y);
+    let deltaTheta = unitAngle(v1x, v1y, v2x, v2y);
 
-    // Split into segments
-    const segments = Math.ceil(Math.abs(deltaTheta / (Math.PI / 2)));
-    const delta = deltaTheta / segments;
+    if (sweepFlag === 0 && deltaTheta > 0) deltaTheta -= Math.PI * 2;
+    if (sweepFlag === 1 && deltaTheta < 0) deltaTheta += Math.PI * 2;
+
+    // Segment splitting (<= 90° each)
+    let segments = Math.max(Math.ceil(Math.abs(deltaTheta) / (Math.PI / 2)), 1);
+    const dTheta = deltaTheta / segments;
 
     const result: CubicCommand[] = [];
 
     for (let i = 0; i < segments; i++) {
-      const t1 = theta1 + i * delta;
-      const t2 = t1 + delta;
+      const t1 = theta1;
+      const t2 = t1 + dTheta;
 
+      // Points on ellipse
       const cosT1 = Math.cos(t1);
       const sinT1 = Math.sin(t1);
       const cosT2 = Math.cos(t2);
       const sinT2 = Math.sin(t2);
 
-      // Endpoints
-      const e1x = cx + rxAbs * (cosRad * cosT1 - sinRad * sinT1);
-      const e1y = cy + ryAbs * (sinRad * cosT1 + cosRad * sinT1);
-      const e2x = cx + rxAbs * (cosRad * cosT2 - sinRad * sinT2);
-      const e2y = cy + ryAbs * (sinRad * cosT2 + cosRad * sinT2);
+      // Position on rotated/scaled ellipse
+      const p1x = cx + rx * (cosPhi * cosT1 - sinPhi * sinT1);
+      const p1y = cy + ry * (sinPhi * cosT1 + cosPhi * sinT1);
+      const p2x = cx + rx * (cosPhi * cosT2 - sinPhi * sinT2);
+      const p2y = cy + ry * (sinPhi * cosT2 + cosPhi * sinT2);
 
-      // Derivatives for control points
+      // Derivative vector (rotated) at t:
+      // d/dt [ R * rot * [cos t; sin t] ] = R * rot * [-sin t; cos t]
+      const d1x = rx * (cosPhi * -sinT1) - ry * (sinPhi * cosT1);
+      const d1y = rx * (sinPhi * -sinT1) + ry * (cosPhi * cosT1);
+      const d2x = rx * (cosPhi * -sinT2) - ry * (sinPhi * cosT2);
+      const d2y = rx * (sinPhi * -sinT2) + ry * (cosPhi * cosT2);
+
+      // Control points using alpha
       const alpha = (4 / 3) * Math.tan((t2 - t1) / 4);
 
-      const c1x = e1x - alpha * (rxAbs * (cosRad * sinT1 + sinRad * cosT1));
-      const c1y = e1y - alpha * (ryAbs * (sinRad * sinT1 - cosRad * cosT1));
-      const c2x = e2x + alpha * (rxAbs * (cosRad * sinT2 + sinRad * cosT2));
-      const c2y = e2y + alpha * (ryAbs * (sinRad * sinT2 - cosRad * cosT2));
+      const c1x = p1x + alpha * d1x;
+      const c1y = p1y + alpha * d1y;
+      const c2x = p2x - alpha * d2x;
+      const c2y = p2y - alpha * d2y;
 
       result.push({
         type: "C",
@@ -1092,9 +1104,12 @@ export class IconPath {
         y1: c1y,
         x2: c2x,
         y2: c2y,
-        x: e2x,
-        y: e2y,
+        x: p2x,
+        y: p2y,
       });
+
+      // Advance
+      theta1 = t2;
     }
 
     return result;
