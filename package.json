@@ -1,6 +1,6 @@
 {
   "name": "@neptune3d/icon-font",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Library for creating icon fonts with composition.",
   "keywords": [
     "icon",

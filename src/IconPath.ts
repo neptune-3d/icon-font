@@ -809,31 +809,31 @@ export class IconPath {
   }
 
   /**
-   * Append a circular subpath, equivalent to an SVG <circle>.
+   * Append an elliptical subpath, equivalent to an SVG <ellipse>.
    *
-   * Approximates the circle using four cubic Bézier curves.
-   * The approximation uses the constant kappa = 4*(√2 - 1)/3 ≈ 0.5522847498
-   * which gives a visually accurate circle.
+   * Approximates the ellipse using four cubic Bézier curves.
+   * The approximation uses the constant kappa = 4*(√2 - 1)/3 ≈ 0.5522847498,
+   * which gives a visually accurate ellipse when applied to both radii.
    *
    * @param cx Center x coordinate
    * @param cy Center y coordinate
-   * @param r  Radius of the circle
-   * @returns  This IconPath with the circle appended
+   * @param rx Horizontal radius
+   * @param ry Vertical radius
+   * @returns  This IconPath with the ellipse appended
    */
-  circle(cx: number, cy: number, r: number): IconPath {
-    const kappa = 0.5522847498307936; // control point offset factor
+  ellipse(cx: number, cy: number, rx: number, ry: number): IconPath {
+    const kappa = 0.5522847498307936;
 
-    const ox = r * kappa; // horizontal control point offset
-    const oy = r * kappa; // vertical control point offset
+    const ox = rx * kappa;
+    const oy = ry * kappa;
 
-    const x0 = cx - r;
+    const x0 = cx - rx;
     const y0 = cy;
     const x1 = cx;
-    const y1 = cy - r;
-    const x2 = cx + r;
-    const y3 = cy + r;
+    const y1 = cy - ry;
+    const x2 = cx + rx;
+    const y3 = cy + ry;
 
-    // Start at leftmost point
     this.m(x0, y0);
 
     // Top-left quadrant
@@ -848,8 +848,23 @@ export class IconPath {
     // Bottom-left quadrant
     this.c(x1 - ox, y3, x0, y0 + oy, x0, y0);
 
-    this.close();
-    return this;
+    return this.close();
+  }
+
+  /**
+   * Append a circular subpath, equivalent to an SVG <circle>.
+   *
+   * Internally delegates to `ellipse` with equal radii for x and y.
+   * Approximates the circle using four cubic Bézier curves via the
+   * kappa constant, ensuring a visually accurate circle.
+   *
+   * @param cx Center x coordinate
+   * @param cy Center y coordinate
+   * @param r  Radius of the circle
+   * @returns  This IconPath with the circle appended
+   */
+  circle(cx: number, cy: number, r: number): IconPath {
+    return this.ellipse(cx, cy, r, r);
   }
 
   /**
@@ -864,7 +879,7 @@ export class IconPath {
    *
    * @returns The canonicalized commands array.
    */
-  getCanonicalOpenTypeCommands(): OpenTypeCommand[] {
+  getOpenTypeCommands(): OpenTypeCommand[] {
     const out: OpenTypeCommand[] = [];
 
     let cx = 0,
@@ -978,7 +993,7 @@ export class IconPath {
   }
 
   /**
-   * Split the current command list into subpaths.
+   * Split the given command list ( by default the current commands ) into subpaths.
    *
    * Each subpath starts with an `M` and ends with a `Z`. If a new `M`
    * appears before a `Z`, the previous subpath is implicitly closed.
@@ -988,7 +1003,9 @@ export class IconPath {
    *
    * @returns Array of subpath command arrays
    */
-  splitSubpaths(commands = this._commands): IconPathCommand[][] {
+  splitSubpaths<T extends IconPathCommand[]>(
+    commands: T = this._commands as T
+  ): T[] {
     const parts: IconPathCommand[][] = [];
     let current: IconPathCommand[] = [];
 
@@ -1011,7 +1028,7 @@ export class IconPath {
     }
 
     if (current.length) parts.push(current);
-    return parts;
+    return parts as T[];
   }
 
   /**
@@ -1020,10 +1037,10 @@ export class IconPath {
    * Y coordinates are flipped (IconPath size - y) to match font coordinate system.
    * The polygonal area is computed from the endpoints of each segment.
    *
-   * @param sub A subpath command array (from splitSubpaths)
+   * @param sub A subpath command array (from splitSubpaths), restricted to OpenTypeCommand[]
    * @returns   Signed area: negative = clockwise, positive = counter‑clockwise
    */
-  getSignedAreaFontSpace(sub: IconPathCommand[]): number {
+  getSignedAreaFontSpace(sub: OpenTypeCommand[]): number {
     const pts: Point[] = [];
     let cx = 0,
       cy = 0;
@@ -1035,25 +1052,25 @@ export class IconPath {
           cy = this._size - c.y;
           pts.push({ x: cx, y: cy });
           break;
+
         case "L":
           cx = c.x;
           cy = this._size - c.y;
           pts.push({ x: cx, y: cy });
           break;
-        case "H":
+
+        case "Q":
           cx = c.x;
-          pts.push({ x: cx, y: cy });
-          break;
-        case "V":
           cy = this._size - c.y;
           pts.push({ x: cx, y: cy });
           break;
-        case "Q":
+
         case "C":
           cx = c.x;
           cy = this._size - c.y;
           pts.push({ x: cx, y: cy });
           break;
+
         case "Z":
           // closure, no new point
           break;
@@ -1061,7 +1078,6 @@ export class IconPath {
     }
 
     let area = 0;
-
     for (let i = 0; i < pts.length; i++) {
       const a = pts[i];
       const b = pts[(i + 1) % pts.length];
@@ -1084,7 +1100,7 @@ export class IconPath {
    * @param sub A subpath command array (from splitSubpaths)
    * @returns   A new command array with reversed direction
    */
-  reverseSubpath(sub: IconPathCommand[]): IconPathCommand[] {
+  reverseSubpath<T extends IconPathCommand[]>(sub: T): T {
     const out: IconPathCommand[] = [];
 
     // Precompute absolute endpoints for each command in authoring space
@@ -1137,7 +1153,7 @@ export class IconPath {
       }
     }
 
-    if (verts.length === 0) return sub.slice();
+    if (verts.length === 0) return sub.slice() as T;
 
     // Start at last vertex
     const last = verts[verts.length - 1]!;
@@ -1208,7 +1224,7 @@ export class IconPath {
     }
 
     if (sub.some((s) => s.type === "Z")) out.push({ type: "Z" });
-    return out;
+    return out as T;
   }
 
   /**
@@ -1220,9 +1236,9 @@ export class IconPath {
    * @param outerShouldBeCW Whether the outermost contour should be clockwise
    * @returns A new array of commands with normalized winding
    */
-  getNormalizedWindingForFont(outerShouldBeCW: boolean): IconPathCommand[] {
-    const subpaths = this.splitSubpaths(this.getCanonicalOpenTypeCommands());
-    const normalized: IconPathCommand[] = [];
+  getNormalizedWindingForFont(outerShouldBeCW: boolean): OpenTypeCommand[] {
+    const subpaths = this.splitSubpaths(this.getOpenTypeCommands());
+    const normalized: OpenTypeCommand[] = [];
 
     for (let idx = 0; idx < subpaths.length; idx++) {
       const sub = subpaths[idx];
@@ -1257,7 +1273,7 @@ export class IconPath {
     const metricsHeight = ascender - descender; // vertical band of the font
     const factor = metricsHeight / this._size; // scale design grid into font units
     const path = new Path();
-    const cmds = this.getNormalizedWindingForFont(true) as OpenTypeCommand[];
+    const cmds = this.getNormalizedWindingForFont(true);
 
     // Compute bounding box of the normalized path
     const bbox = this.getCommandBounds();
