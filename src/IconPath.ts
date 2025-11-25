@@ -504,17 +504,25 @@ export class IconPath {
    *
    * Multiplies all coordinates by the given scale factors.
    * If only `sx` is provided, both axes are scaled uniformly.
-   * Scaling is performed around the given center point (cx, cy).
-   * Defaults to the origin (0,0) if not provided.
+   *
+   * Scaling is performed around the given center point `(cx, cy)`.
+   * By default, the center is the canvas midpoint `(size/2, size/2)`,
+   * so icons expand/contract while staying visually centered.
+   *
    * Returns `this` for chaining.
    *
    * @param sx Scale factor for x axis
    * @param sy Optional scale factor for y axis (defaults to sx)
-   * @param cx Optional center x (default 0)
-   * @param cy Optional center y (default 0)
+   * @param cx Optional center x (default canvas center)
+   * @param cy Optional center y (default canvas center)
    * @returns  The IconPath instance for chaining
    */
-  scale(sx: number, sy: number = sx, cx: number = 0, cy: number = 0): IconPath {
+  scale(
+    sx: number,
+    sy: number = sx,
+    cx: number = this._size / 2,
+    cy: number = this._size / 2
+  ): IconPath {
     this._mapCoords((x, y) => {
       const dx = x - cx;
       const dy = y - cy;
@@ -697,6 +705,49 @@ export class IconPath {
     const dy = minY + (targetHeight - shapeHeight) / 2 - bounds.minY;
 
     return this.translate(dx, dy);
+  }
+
+  /**
+   * Scale and translate this path so it fits inside the canvas bounds.
+   *
+   * - First centers the path into the canvas bounds.
+   * - Then scales the shape to fit inside the canvas box (0,0 → size,size).
+   * - If `preserveAspect` is true, uses uniform scaling (same factor for x and y).
+   * - Otherwise scales independently along each axis.
+   *
+   * @param preserveAspect Whether to preserve aspect ratio (default true)
+   * @returns The IconPath instance for chaining
+   */
+  fit(preserveAspect: boolean = true): IconPath {
+    // Step 1: center into canvas
+    this.center();
+
+    // Step 2: compute bounds after centering
+    const cmdBounds = this.getCommandBounds();
+    const canvasBounds = this.getCanvasBounds();
+
+    const shapeWidth = cmdBounds.maxX - cmdBounds.minX;
+    const shapeHeight = cmdBounds.maxY - cmdBounds.minY;
+    const canvasWidth = canvasBounds.maxX - canvasBounds.minX;
+    const canvasHeight = canvasBounds.maxY - canvasBounds.minY;
+
+    if (shapeWidth === 0 || shapeHeight === 0) {
+      return this; // nothing to fit
+    }
+
+    // scale factors
+    let sx = canvasWidth / shapeWidth;
+    let sy = canvasHeight / shapeHeight;
+
+    if (preserveAspect) {
+      const s = Math.min(sx, sy); // "contain"
+      sx = s;
+      sy = s;
+    }
+
+    // scale around canvas center (since we already centered)
+    const { x: cx, y: cy } = this.getCanvasCenter();
+    return this.scale(sx, sy, cx, cy);
   }
 
   /**
