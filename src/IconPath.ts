@@ -748,9 +748,7 @@ export class IconPath {
       sy = s;
     }
 
-    // scale around canvas center (since we already centered)
-    const { x: cx, y: cy } = this.getCanvasCenter();
-    return this.scale(sx, sy, cx, cy);
+    return this.scale(sx, sy);
   }
 
   /**
