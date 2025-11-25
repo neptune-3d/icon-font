@@ -79,4 +79,47 @@ describe("IconPath", () => {
     expect(noAspectBounds.minX).toBe(0);
     expect(noAspectBounds.maxX).toBe(24);
   });
+
+  test("toOpenTypePath", () => {
+    const path = new IconPath().rect({
+      x: 0,
+      y: 0,
+      width: 24,
+      height: 24,
+    });
+
+    const otPath = path.clone().toOpenTypePath(800, -200);
+
+    const otPathBounds = otPath.getBoundingBox();
+
+    expect(otPathBounds.x1).toBe(0);
+    expect(otPathBounds.y1).toBe(-200);
+    expect(otPathBounds.x2).toBe(1000);
+    expect(otPathBounds.y2).toBe(800);
+
+    const otHalfPath = path.clone().scale(0.5).toOpenTypePath(800, -200);
+
+    const otHalfPathBounds = otHalfPath.getBoundingBox();
+
+    expect(otHalfPathBounds.x1).toBe(250);
+    expect(otHalfPathBounds.y1).toBe(50);
+    expect(otHalfPathBounds.x2).toBe(750);
+    expect(otHalfPathBounds.y2).toBe(550);
+
+    const bottomMiddlePath = path.clone().scale(1 / 10);
+
+    bottomMiddlePath.translate(
+      0,
+      24 - bottomMiddlePath.getCommandBounds().maxY
+    );
+
+    const otBottomMiddlePath = bottomMiddlePath.toOpenTypePath(800, -200);
+
+    const otBottomMiddleBounds = otBottomMiddlePath.getBoundingBox();
+
+    expect(Math.round(otBottomMiddleBounds.x1 * 100) / 100).toBe(450);
+    expect(Math.round(otBottomMiddleBounds.y1 * 100) / 100).toBe(-200);
+    expect(Math.round(otBottomMiddleBounds.x2 * 100) / 100).toBe(550);
+    expect(Math.round(otBottomMiddleBounds.y2 * 100) / 100).toBe(-100);
+  });
 });

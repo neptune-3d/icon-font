@@ -1732,40 +1732,36 @@ export class IconPath {
   }
 
   /**
-   * Convert this icon path into an OpenType.js Path object.
+   * Convert this IconPath into an OpenType.js Path object.
    *
-   * - Normalizes winding for font export (outer contour clockwise).
-   * - Works only with canonical commands (M/L/Q/C/Z).
-   * - Scales coordinates from IconPath width/height into font metrics.
-   * - Flips Y axis into font space.
-   * - Aligns the top of the icon’s bounding box to the ascender line,
-   *   so the font reflects the design space faithfully.
+   * - Normalizes winding order for font export (outer contours clockwise).
+   * - Scales design-space coordinates (width/height) into font-space units
+   *   using the provided ascender/descender metrics.
+   * - Flips the Y axis so that design-space top (y=0) maps to the font ascender
+   *   and design-space bottom (y=height) maps to the font descender.
+   * - Translates each canonical command (M/L/Q/C/Z) into the corresponding
+   *   OpenType.js Path command.
    *
-   * @param ascender    Ascender height (e.g. 800)
-   * @param descender   Descender depth (e.g. -200)
-   * @returns           A Path object ready for OpenType.js
+   * @param ascender   Ascender height in font units (e.g. 800)
+   * @param descender  Descender depth in font units (e.g. -200)
+   * @returns          A Path object ready for use with OpenType.js
    */
   toOpenTypePath(ascender: number, descender: number): Path {
-    const metricsHeight = ascender - descender; // vertical band of the font
-    const factorX = metricsHeight / this._width; // scale X from design width
-    const factorY = metricsHeight / this._height; // scale Y from design height
+    const metricsHeight = ascender - descender; // full em height
+    const factorX = metricsHeight / this._width;
+    const factorY = metricsHeight / this._height;
     const path = new Path();
     const cmds = this.getNormalizedWindingForFont(true);
 
-    // Compute bounding box of the normalized path
-    const bbox = this.getCommandBounds();
-
-    // Align top of icon bbox to ascender
-    const offsetY = ascender - bbox.maxY * factorY;
-
     for (const cmd of cmds) {
-      let x = 0,
-        y = 0;
-
-      if (cmd.type !== "Z") {
-        x = cmd.x * factorX;
-        y = offsetY + (this._height - cmd.y) * factorY;
+      if (cmd.type === "Z") {
+        path.close();
+        continue;
       }
+
+      const x = cmd.x * factorX;
+      // Flip Y into font space: design 0 (top) → ascender, design height → descender
+      const y = ascender - cmd.y * factorY;
 
       switch (cmd.type) {
         case "M":
@@ -1777,7 +1773,7 @@ export class IconPath {
         case "Q":
           path.quadraticCurveTo(
             cmd.x1 * factorX,
-            offsetY + (this._height - cmd.y1) * factorY,
+            ascender - cmd.y1 * factorY,
             x,
             y
           );
@@ -1785,15 +1781,12 @@ export class IconPath {
         case "C":
           path.curveTo(
             cmd.x1 * factorX,
-            offsetY + (this._height - cmd.y1) * factorY,
+            ascender - cmd.y1 * factorY,
             cmd.x2 * factorX,
-            offsetY + (this._height - cmd.y2) * factorY,
+            ascender - cmd.y2 * factorY,
             x,
             y
           );
-          break;
-        case "Z":
-          path.close();
           break;
       }
     }
