@@ -505,27 +505,29 @@ export class IconPath {
   /**
    * Scale all commands in this path in place.
    *
-   * Multiplies all coordinates by the given scale factors.
-   * If only `sx` is provided, both axes are scaled uniformly.
-   *
-   * Scaling is performed around the given center point `(cx, cy)`.
-   * By default, the center is the canvas midpoint `(width/2, height/2)`,
-   * so icons expand/contract while staying visually centered.
+   * - Multiplies all coordinates by the given scale factors.
+   * - If only `sx` is provided, both axes are scaled uniformly.
+   * - Scaling is performed around the given center point `(cx, cy)`.
+   * - By default, the center is the shape’s bounding box midpoint,
+   *   so the path grows/shrinks around its own geometric center.
+   * - This is the purest form of scaling: the shape expands/contracts
+   *   symmetrically without drifting relative to itself.
+   * - You can override `cx, cy` to scale around the canvas center or origin.
    *
    * Returns `this` for chaining.
    *
    * @param sx Scale factor for x axis
    * @param sy Optional scale factor for y axis (defaults to sx)
-   * @param cx Optional center x (default canvas center)
-   * @param cy Optional center y (default canvas center)
+   * @param cx Optional center x (default bounding box center)
+   * @param cy Optional center y (default bounding box center)
    * @returns  The IconPath instance for chaining
    */
-  scale(
-    sx: number,
-    sy: number = sx,
-    cx: number = this._width / 2,
-    cy: number = this._height / 2
-  ): IconPath {
+  scale(sx: number, sy: number = sx, cx?: number, cy?: number): IconPath {
+    const center = this.getCommandsCenter();
+
+    cx = cx ?? center.x;
+    cy = cy ?? center.y;
+
     this._mapCoords((x, y) => {
       const dx = x - cx;
       const dy = y - cy;
@@ -711,36 +713,42 @@ export class IconPath {
   }
 
   /**
-   * Scale and translate this path so it fits inside the canvas bounds.
+   * Scale and translate this path so it fits inside the given bounds.
    *
-   * - First centers the path into the canvas bounds.
-   * - Then scales the shape to fit inside the canvas box (0,0 → width,height).
+   * - Scales the shape to fit inside the box defined by (minX,minY → maxX,maxY).
+   * - Defaults to the full design canvas (0,0 → this.width,this.height).
    * - If `preserveAspect` is true, uses uniform scaling (same factor for x and y).
    * - Otherwise scales independently along each axis.
+   * - After scaling, translates the path so its bounding box aligns with the target bounds.
    *
    * @param preserveAspect Whether to preserve aspect ratio (default true)
-   * @returns The IconPath instance for chaining
+   * @param minX           Left bound (default 0)
+   * @param minY           Top bound (default 0)
+   * @param maxX           Right bound (default this.width)
+   * @param maxY           Bottom bound (default this.height)
+   * @returns              The IconPath instance for chaining
    */
-  fit(preserveAspect: boolean = true): IconPath {
-    // Step 1: center into canvas
-    this.center();
-
-    // Step 2: compute bounds after centering
+  fit(
+    preserveAspect: boolean = true,
+    minX: number = 0,
+    minY: number = 0,
+    maxX: number = this._width,
+    maxY: number = this._height
+  ): IconPath {
     const cmdBounds = this.getCommandBounds();
-    const canvasBounds = this.getCanvasBounds();
 
     const shapeWidth = cmdBounds.maxX - cmdBounds.minX;
     const shapeHeight = cmdBounds.maxY - cmdBounds.minY;
-    const canvasWidth = canvasBounds.maxX - canvasBounds.minX;
-    const canvasHeight = canvasBounds.maxY - canvasBounds.minY;
+    const targetWidth = maxX - minX;
+    const targetHeight = maxY - minY;
 
     if (shapeWidth === 0 || shapeHeight === 0) {
       return this; // nothing to fit
     }
 
     // scale factors
-    let sx = canvasWidth / shapeWidth;
-    let sy = canvasHeight / shapeHeight;
+    let sx = targetWidth / shapeWidth;
+    let sy = targetHeight / shapeHeight;
 
     if (preserveAspect) {
       const s = Math.min(sx, sy); // "contain"
@@ -748,7 +756,17 @@ export class IconPath {
       sy = s;
     }
 
-    return this.scale(sx, sy);
+    this.scale(sx, sy);
+
+    // Compute new bounds after scaling
+    const newBounds = this.getCommandBounds();
+
+    // Translate so top-left aligns with (minX, minY)
+    const tx = minX - newBounds.minX;
+    const ty = minY - newBounds.minY;
+    this.translate(tx, ty);
+
+    return this;
   }
 
   /**
