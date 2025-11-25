@@ -14,7 +14,7 @@ import type {
  * vector path data in a declarative, chainable way.
  *
  * It encapsulates a list of drawing commands (`IconPathCommand[]`) along
- * with a `size` that defines the coordinate system the path was
+ * with a `width` and `height` that define the coordinate system the path was
  * authored in (commonly an icon grid such as 24×24).
  *
  * Key responsibilities:
@@ -36,23 +36,29 @@ import type {
  * const path = new IconPath(24)
  *   .m(0, 0)
  *   .l(10, 0)
- *   .scale({ x: 2 })
+ *   .scale(2)
  *   .center();
  * ```
  *
  * @class IconPath
  */
 export class IconPath {
-  constructor(size: number = 24, commands: IconPathCommand[] = []) {
-    this._size = size;
+  constructor(width = 24, height = width, commands: IconPathCommand[] = []) {
+    this._width = width;
+    this._height = height;
     this._commands = commands;
   }
 
-  protected _size: number;
+  protected _width: number;
+  protected _height: number;
   protected _commands: IconPathCommand[];
 
-  get size() {
-    return this._size;
+  get width() {
+    return this._width;
+  }
+
+  get height() {
+    return this._height;
   }
 
   get commands() {
@@ -433,10 +439,7 @@ export class IconPath {
       y
     );
 
-    // Push each cubic segment into commands
-    for (const seg of beziers) {
-      this._commands.push(seg);
-    }
+    this._commands.push(...beziers);
 
     return this;
   }
@@ -506,7 +509,7 @@ export class IconPath {
    * If only `sx` is provided, both axes are scaled uniformly.
    *
    * Scaling is performed around the given center point `(cx, cy)`.
-   * By default, the center is the canvas midpoint `(size/2, size/2)`,
+   * By default, the center is the canvas midpoint `(width/2, height/2)`,
    * so icons expand/contract while staying visually centered.
    *
    * Returns `this` for chaining.
@@ -520,8 +523,8 @@ export class IconPath {
   scale(
     sx: number,
     sy: number = sx,
-    cx: number = this._size / 2,
-    cy: number = this._size / 2
+    cx: number = this._width / 2,
+    cy: number = this._height / 2
   ): IconPath {
     this._mapCoords((x, y) => {
       const dx = x - cx;
@@ -595,10 +598,10 @@ export class IconPath {
    * Control points are also flipped. Vertical-only commands (V) remain unchanged.
    *
    * @param width Optional width of the design space to flip within.
-   *              Defaults to this.size if not provided.
+   *              Defaults to this.width if not provided.
    * @returns The IconPath instance for chaining
    */
-  flipX(width: number = this.size): IconPath {
+  flipX(width: number = this.width): IconPath {
     this._mapCoords((x, y) => ({ x: width - x, y }));
     return this;
   }
@@ -610,10 +613,10 @@ export class IconPath {
    * Control points are also flipped. Horizontal-only commands (H) remain unchanged.
    *
    * @param height Optional height of the design space to flip within.
-   *               Defaults to this.size if not provided.
+   *               Defaults to this.height if not provided.
    * @returns The IconPath instance for chaining
    */
-  flipY(height: number = this.size): IconPath {
+  flipY(height: number = this.height): IconPath {
     this._mapCoords((x, y) => ({ x, y: height - y }));
     return this;
   }
@@ -677,21 +680,21 @@ export class IconPath {
    * Computes the bounding box of the current path commands and translates
    * the path so that its shape is centered within the specified target box.
    *
-   * - If parameters are omitted, the default box is (0,0) → (size,size).
+   * - If parameters are omitted, the default box is (0,0) → (width,height).
    * - This allows centering inside arbitrary rectangles, including offset boxes,
    *   enabling both centering and translation in one step.
    *
    * @param minX Minimum x of target box (default 0)
    * @param minY Minimum y of target box (default 0)
-   * @param maxX Maximum x of target box (default this._size)
-   * @param maxY Maximum y of target box (default this._size)
+   * @param maxX Maximum x of target box (default this.width)
+   * @param maxY Maximum y of target box (default this.height)
    * @returns The IconPath instance for chaining
    */
   center(
     minX: number = 0,
     minY: number = 0,
-    maxX: number = this._size,
-    maxY: number = this._size
+    maxX: number = this.width,
+    maxY: number = this.height
   ): IconPath {
     const bounds = this.getCommandBounds();
 
@@ -711,7 +714,7 @@ export class IconPath {
    * Scale and translate this path so it fits inside the canvas bounds.
    *
    * - First centers the path into the canvas bounds.
-   * - Then scales the shape to fit inside the canvas box (0,0 → size,size).
+   * - Then scales the shape to fit inside the canvas box (0,0 → width,height).
    * - If `preserveAspect` is true, uses uniform scaling (same factor for x and y).
    * - Otherwise scales independently along each axis.
    *
@@ -789,13 +792,12 @@ export class IconPath {
   /**
    * Return the full canvas bounds.
    *
-   * This is the design-space rectangle the path is defined in,
-   * typically from (0,0) to (IconPath size,IconPath size).
+   * This is the design-space rectangle the path is defined in from (0,0) to (width,height).
    *
    * @returns { minX, minY, maxX, maxY } for the canvas box
    */
   getCanvasBounds(): IconPathBounds {
-    return { minX: 0, minY: 0, maxX: this._size, maxY: this._size };
+    return { minX: 0, minY: 0, maxX: this.width, maxY: this.height };
   }
 
   /**
@@ -818,15 +820,14 @@ export class IconPath {
    * Return the geometric center of the canvas box.
    *
    * This is simply the midpoint of the full design-space rectangle
-   * (0,0) to (size,size).
+   * (0,0) → (width,height).
    *
    * @returns { x, y } center of the canvas
    */
   getCanvasCenter(): Point {
-    const bounds = this.getCanvasBounds();
     return {
-      x: (bounds.minX + bounds.maxX) / 2,
-      y: (bounds.minY + bounds.maxY) / 2,
+      x: this._width / 2,
+      y: this._height / 2,
     };
   }
 
@@ -1478,7 +1479,7 @@ export class IconPath {
   /**
    * Compute the signed area of a subpath in font space.
    *
-   * Y coordinates are flipped (IconPath size - y) to match font coordinate system.
+   * Y coordinates are flipped (IconPath height - y) to match font coordinate system.
    * The polygonal area is computed from the endpoints of each segment.
    *
    * @param sub A subpath command array (from splitSubpaths), restricted to OpenTypeCommand[]
@@ -1492,29 +1493,13 @@ export class IconPath {
     for (const c of sub) {
       switch (c.type) {
         case "M":
-          cx = c.x;
-          cy = this._size - c.y;
-          pts.push({ x: cx, y: cy });
-          break;
-
         case "L":
-          cx = c.x;
-          cy = this._size - c.y;
-          pts.push({ x: cx, y: cy });
-          break;
-
         case "Q":
-          cx = c.x;
-          cy = this._size - c.y;
-          pts.push({ x: cx, y: cy });
-          break;
-
         case "C":
           cx = c.x;
-          cy = this._size - c.y;
+          cy = this._height - c.y; // flip Y against height
           pts.push({ x: cx, y: cy });
           break;
-
         case "Z":
           // closure, no new point
           break;
@@ -1704,7 +1689,7 @@ export class IconPath {
    *
    * - Normalizes winding for font export (outer contour clockwise).
    * - Works only with canonical commands (M/L/Q/C/Z).
-   * - Scales coordinates from IconPath size to font metrics height.
+   * - Scales coordinates from IconPath width/height into font metrics.
    * - Flips Y axis into font space.
    * - Aligns the top of the icon’s bounding box to the ascender line,
    *   so the font reflects the design space faithfully.
@@ -1715,7 +1700,8 @@ export class IconPath {
    */
   toOpenTypePath(ascender: number, descender: number): Path {
     const metricsHeight = ascender - descender; // vertical band of the font
-    const factor = metricsHeight / this._size; // scale design grid into font units
+    const factorX = metricsHeight / this._width; // scale X from design width
+    const factorY = metricsHeight / this._height; // scale Y from design height
     const path = new Path();
     const cmds = this.getNormalizedWindingForFont(true);
 
@@ -1723,15 +1709,15 @@ export class IconPath {
     const bbox = this.getCommandBounds();
 
     // Align top of icon bbox to ascender
-    const offsetY = ascender - bbox.maxY * factor;
+    const offsetY = ascender - bbox.maxY * factorY;
 
     for (const cmd of cmds) {
       let x = 0,
-        y = 0; // default safe values
+        y = 0;
 
       if (cmd.type !== "Z") {
-        x = cmd.x * factor;
-        y = offsetY + (this._size - cmd.y) * factor;
+        x = cmd.x * factorX;
+        y = offsetY + (this._height - cmd.y) * factorY;
       }
 
       switch (cmd.type) {
@@ -1743,18 +1729,18 @@ export class IconPath {
           break;
         case "Q":
           path.quadraticCurveTo(
-            cmd.x1 * factor,
-            offsetY + (this._size - cmd.y1) * factor,
+            cmd.x1 * factorX,
+            offsetY + (this._height - cmd.y1) * factorY,
             x,
             y
           );
           break;
         case "C":
           path.curveTo(
-            cmd.x1 * factor,
-            offsetY + (this._size - cmd.y1) * factor,
-            cmd.x2 * factor,
-            offsetY + (this._size - cmd.y2) * factor,
+            cmd.x1 * factorX,
+            offsetY + (this._height - cmd.y1) * factorY,
+            cmd.x2 * factorX,
+            offsetY + (this._height - cmd.y2) * factorY,
             x,
             y
           );
@@ -1806,36 +1792,41 @@ export class IconPath {
   /**
    * Create a deep copy of this IconPath.
    *
-   * This method duplicates the internal command list and source size,
+   * This method duplicates the internal command list and source dimensions,
    * returning a new IconPath instance. Use this when you want to branch
    * or reuse a path without mutating the original.
    *
-   * @returns A new IconPath with identical commands and source size
+   * @returns A new IconPath with identical commands and source width/height
    */
   clone(): IconPath {
     const copiedCommands = this._commands.map((cmd) => ({ ...cmd }));
-    return new IconPath(this._size, copiedCommands);
+    return new IconPath(this._width, this._height, copiedCommands);
   }
 
   /**
    * Merge multiple IconPath instances into a single path.
    *
    * This static convenience method creates a new IconPath with the given
-   * `IconPath size` (defaulting to 24) and appends the command lists from all
+   * width/height (defaulting to 24×24) and appends the command lists from all
    * provided paths into its internal command array. The result is a single
    * composite path that contains the concatenated drawing instructions of
    * each input.
    *
    * Note: This performs a shallow merge of commands; it does not normalize
    * coordinate systems or apply transforms. All paths are assumed to share
-   * the same source size and coordinate space.
+   * the same source width/height and coordinate space.
    *
-   * @param paths      Array of IconPath instances to merge
-   * @param IconPath size Optional source size for the merged path (defaults to 24)
-   * @returns          A new IconPath containing all commands from the input paths
+   * @param paths   Array of IconPath instances to merge
+   * @param width   Optional source width for the merged path (default 24)
+   * @param height  Optional source height for the merged path (defaults to width)
+   * @returns       A new IconPath containing all commands from the input paths
    */
-  static merge(paths: IconPath[], size: number = 24): IconPath {
-    const merged = new IconPath(size);
+  static merge(
+    paths: IconPath[],
+    width: number = 24,
+    height: number = width
+  ): IconPath {
+    const merged = new IconPath(width, height);
     for (const p of paths) {
       merged._commands.push(...p.commands);
     }
