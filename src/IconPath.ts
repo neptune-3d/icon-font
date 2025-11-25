@@ -1311,6 +1311,33 @@ export class IconPath {
   }
 
   /**
+   * Translate this path so that, when converted to font space,
+   * its bottom edge aligns with the font baseline (y=0).
+   *
+   * Works in design space but uses font metrics to compute
+   * the correct translation.
+   *
+   * @param ascender   Ascender height (e.g. 800)
+   * @param descender  Descender depth (e.g. -200)
+   * @returns          The IconPath instance for chaining
+   */
+  alignToFontBaseline(ascender: number, descender: number): IconPath {
+    const metricsHeight = ascender - descender;
+    const scaleY = metricsHeight / this._height;
+
+    const bbox = this.getCommandBounds();
+    const bottomDesignY = bbox.maxY;
+
+    // In font space, bottom maps to (this._height - bottomDesignY) * scaleY + descender
+    const bottomFontY = (this._height - bottomDesignY) * scaleY + descender;
+
+    // We want bottomFontY = 0 → so translate by -bottomFontY/scaleY in design units
+    const dy = -bottomFontY / scaleY;
+
+    return this.translate(0, dy);
+  }
+
+  /**
    * Canonicalize smooth SVG path commands (S/T/H/V) into explicit
    * OpenType-compatible commands (L/Q/C). This prepares the path
    * for reliable font export (TTF/CFF).
