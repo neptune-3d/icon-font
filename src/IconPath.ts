@@ -1311,30 +1311,52 @@ export class IconPath {
   }
 
   /**
-   * Translate this path so that, when converted to font space,
-   * its bottom edge aligns with the font baseline (y=0).
+   * Align this path vertically in design space relative to font metrics.
    *
-   * Works in design space but uses font metrics to compute
-   * the correct translation.
+   * Operates entirely in design units (top=0, bottom=designHeight).
+   * Returns `this` for chaining.
    *
-   * @param ascender   Ascender height (e.g. 800)
-   * @param descender  Descender depth (e.g. -200)
-   * @returns          The IconPath instance for chaining
+   * @param ascender   Font ascender (e.g. 800)
+   * @param descender  Font descender (e.g. -200)
+   * @param mode       Alignment mode: "baseline" | "ascender" | "descender" | "center"
    */
-  alignToFontBaseline(ascender: number, descender: number): IconPath {
-    const metricsHeight = ascender - descender;
-    const scaleY = metricsHeight / this._height;
+  alignToFont(
+    ascender: number,
+    descender: number,
+    mode: "baseline" | "ascender" | "descender" | "center"
+  ): IconPath {
+    const designHeight = this._height; // e.g., 24
 
-    const bbox = this.getCommandBounds();
-    const bottomDesignY = bbox.maxY;
+    // Map font-space Y → design-space Y (0..designHeight, top=0, bottom=designHeight)
+    const fontYToDesign = (yFont: number) =>
+      designHeight -
+      ((yFont - descender) / (ascender - descender)) * designHeight;
 
-    // In font space, bottom maps to (this._height - bottomDesignY) * scaleY + descender
-    const bottomFontY = (this._height - bottomDesignY) * scaleY + descender;
+    const ascenderDesign = fontYToDesign(ascender); // → 0
+    const descenderDesign = fontYToDesign(descender); // → designHeight
+    const baselineDesign = fontYToDesign(0);
+    const emMidDesign = fontYToDesign((ascender + descender) / 2);
 
-    // We want bottomFontY = 0 → so translate by -bottomFontY/scaleY in design units
-    const dy = -bottomFontY / scaleY;
+    const { minY: pathTop, maxY: pathBottom } = this.getCommandBounds();
+    const pathMid = (pathTop + pathBottom) / 2;
 
-    return this.translate(0, dy);
+    let offsetY = 0;
+    switch (mode) {
+      case "ascender":
+        offsetY = ascenderDesign - pathTop;
+        break;
+      case "descender":
+        offsetY = descenderDesign - pathBottom;
+        break;
+      case "baseline":
+        offsetY = baselineDesign - pathBottom;
+        break;
+      case "center":
+        offsetY = emMidDesign - pathMid;
+        break;
+    }
+
+    return this.translate(0, offsetY);
   }
 
   /**
