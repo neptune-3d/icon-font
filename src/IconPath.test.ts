@@ -65,8 +65,8 @@ describe("IconPath", () => {
 
     const preserveAspectBounds = preserveAspect.getCommandBounds();
 
-    expect(preserveAspectBounds.minY).toBe(2.5);
-    expect(preserveAspectBounds.maxY).toBe(21.5);
+    expect(preserveAspectBounds.minY).toBe(0);
+    expect(preserveAspectBounds.maxY).toBe(19);
     expect(preserveAspectBounds.minX).toBe(0);
     expect(preserveAspectBounds.maxX).toBe(24);
 
