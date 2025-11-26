@@ -15,7 +15,7 @@ describe("IconPath", () => {
 
     const descender = folderPath.clone().alignToFont(800, -200, "descender");
 
-    const descenderBounds = descender.getCommandBounds();
+    const descenderBounds = descender.getBounds();
 
     expect(descenderBounds.minY).toBe(5);
     expect(descenderBounds.maxY).toBe(24);
@@ -24,7 +24,7 @@ describe("IconPath", () => {
 
     const ascender = folderPath.clone().alignToFont(800, -200, "ascender");
 
-    const ascenderBounds = ascender.getCommandBounds();
+    const ascenderBounds = ascender.getBounds();
 
     expect(ascenderBounds.minY).toBe(0);
     expect(ascenderBounds.maxY).toBe(19);
@@ -33,7 +33,7 @@ describe("IconPath", () => {
 
     const center = folderPath.clone().alignToFont(800, -200, "center");
 
-    const centerBounds = center.getCommandBounds();
+    const centerBounds = center.getBounds();
 
     expect(centerBounds.minY).toBe(2.5);
     expect(centerBounds.maxY).toBe(21.5);
@@ -42,7 +42,7 @@ describe("IconPath", () => {
 
     const baseline = folderPath.clone().alignToFont(800, -200, "baseline");
 
-    const baselineBounds = baseline.getCommandBounds();
+    const baselineBounds = baseline.getBounds();
 
     expect(Math.round(baselineBounds.minY * 100) / 100).toBe(0.2);
     expect(Math.round(baselineBounds.maxY * 100) / 100).toBe(19.2);
@@ -59,20 +59,31 @@ describe("IconPath", () => {
       .roundedCorner("tr", 24, 3, 3, 3)
       .roundedCorner("br", 24, 19, 3, 3)
       .roundedCorner("bl", 0, 19, 3, 3)
-      .close();
+      .close()
+      .center(0, 0, 24, 24);
 
-    const preserveAspect = folderPath.clone().fit(true);
+    const folderPathBounds = folderPath.getBounds();
 
-    const preserveAspectBounds = preserveAspect.getCommandBounds();
+    expect(folderPathBounds.minY).toBe(2.5);
+    expect(folderPathBounds.maxY).toBe(21.5);
+    expect(folderPathBounds.minX).toBe(0);
+    expect(folderPathBounds.maxX).toBe(24);
 
-    expect(preserveAspectBounds.minY).toBe(0);
-    expect(preserveAspectBounds.maxY).toBe(19);
+    const preserveAspect = folderPath.clone().fit();
+
+    const preserveAspectBounds = preserveAspect.getBounds();
+
+    // no change expected
+    expect(preserveAspectBounds.minY).toBe(2.5);
+    expect(preserveAspectBounds.maxY).toBe(21.5);
     expect(preserveAspectBounds.minX).toBe(0);
     expect(preserveAspectBounds.maxX).toBe(24);
 
-    const noAspect = folderPath.clone().fit(false);
+    const noAspect = folderPath
+      .clone()
+      .fit(folderPath.width, folderPath.height, false);
 
-    const noAspectBounds = noAspect.getCommandBounds();
+    const noAspectBounds = noAspect.getBounds();
 
     expect(noAspectBounds.minY).toBe(0);
     expect(noAspectBounds.maxY).toBe(24);
@@ -108,10 +119,7 @@ describe("IconPath", () => {
 
     const bottomMiddlePath = path.clone().scale(1 / 10);
 
-    bottomMiddlePath.translate(
-      0,
-      24 - bottomMiddlePath.getCommandBounds().maxY
-    );
+    bottomMiddlePath.translate(0, 24 - bottomMiddlePath.getBounds().maxY);
 
     const otBottomMiddlePath = bottomMiddlePath.toOpenTypePath(800, -200);
 

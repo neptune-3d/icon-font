@@ -523,7 +523,7 @@ export class IconPath {
    * @returns  The IconPath instance for chaining
    */
   scale(sx: number, sy: number = sx, cx?: number, cy?: number): IconPath {
-    const center = this.getCommandsCenter();
+    const center = this.getCenter();
 
     cx = cx ?? center.x;
     cy = cy ?? center.y;
@@ -698,7 +698,7 @@ export class IconPath {
     maxX: number = this.width,
     maxY: number = this.height
   ): IconPath {
-    const bounds = this.getCommandBounds();
+    const bounds = this.getBounds();
 
     const shapeWidth = bounds.maxX - bounds.minX;
     const shapeHeight = bounds.maxY - bounds.minY;
@@ -713,34 +713,28 @@ export class IconPath {
   }
 
   /**
-   * Scale and translate this path so it fits inside the given bounds.
+   * Scale this path so it fits inside the given width/height.
    *
-   * - Scales the shape to fit inside the box defined by (minX,minY → maxX,maxY).
-   * - Defaults to the full design canvas (0,0 → this.width,this.height).
+   * - Scales the shape to fit inside the box defined by the given width/height.
+   * - Defaults to the full design canvas (this.width × this.height).
    * - If `preserveAspect` is true, uses uniform scaling (same factor for x and y).
-   * - Otherwise scales independently along each axis.
-   * - After scaling, translates the path so its bounding box aligns with the target bounds.
+   *   Otherwise scales independently along each axis.
+   * - Does not translate; the path remains anchored at its current position.
    *
+   * @param targetWidth    Target width to fit into (default this.width)
+   * @param targetHeight   Target height to fit into (default this.height)
    * @param preserveAspect Whether to preserve aspect ratio (default true)
-   * @param minX           Left bound (default 0)
-   * @param minY           Top bound (default 0)
-   * @param maxX           Right bound (default this.width)
-   * @param maxY           Bottom bound (default this.height)
    * @returns              The IconPath instance for chaining
    */
   fit(
-    preserveAspect: boolean = true,
-    minX: number = 0,
-    minY: number = 0,
-    maxX: number = this._width,
-    maxY: number = this._height
+    targetWidth: number = this._width,
+    targetHeight: number = this._height,
+    preserveAspect: boolean = true
   ): IconPath {
-    const cmdBounds = this.getCommandBounds();
+    const cmdBounds = this.getBounds();
 
     const shapeWidth = cmdBounds.maxX - cmdBounds.minX;
     const shapeHeight = cmdBounds.maxY - cmdBounds.minY;
-    const targetWidth = maxX - minX;
-    const targetHeight = maxY - minY;
 
     if (shapeWidth === 0 || shapeHeight === 0) {
       return this; // nothing to fit
@@ -758,14 +752,6 @@ export class IconPath {
 
     this.scale(sx, sy);
 
-    // Compute new bounds after scaling
-    const newBounds = this.getCommandBounds();
-
-    // Translate so top-left aligns with (minX, minY)
-    const tx = minX - newBounds.minX;
-    const ty = minY - newBounds.minY;
-    this.translate(tx, ty);
-
     return this;
   }
 
@@ -779,7 +765,7 @@ export class IconPath {
    *
    * @returns { minX, minY, maxX, maxY } for the drawn path
    */
-  getCommandBounds(): IconPathBounds {
+  getBounds(): IconPathBounds {
     let minX = Infinity,
       minY = Infinity,
       maxX = -Infinity,
@@ -806,6 +792,22 @@ export class IconPath {
   }
 
   /**
+   * Return the geometric center of the drawn commands.
+   *
+   * This computes the midpoint of the axis-aligned bounding box
+   * enclosing all path commands.
+   *
+   * @returns { x, y } center of the command bounds
+   */
+  getCenter(): Point {
+    const bounds = this.getBounds();
+    return {
+      x: (bounds.minX + bounds.maxX) / 2,
+      y: (bounds.minY + bounds.maxY) / 2,
+    };
+  }
+
+  /**
    * Return the full canvas bounds.
    *
    * This is the design-space rectangle the path is defined in from (0,0) to (width,height).
@@ -814,22 +816,6 @@ export class IconPath {
    */
   getCanvasBounds(): IconPathBounds {
     return { minX: 0, minY: 0, maxX: this.width, maxY: this.height };
-  }
-
-  /**
-   * Return the geometric center of the drawn commands.
-   *
-   * This computes the midpoint of the axis-aligned bounding box
-   * enclosing all path commands.
-   *
-   * @returns { x, y } center of the command bounds
-   */
-  getCommandsCenter(): Point {
-    const bounds = this.getCommandBounds();
-    return {
-      x: (bounds.minX + bounds.maxX) / 2,
-      y: (bounds.minY + bounds.maxY) / 2,
-    };
   }
 
   /**
@@ -1355,7 +1341,7 @@ export class IconPath {
     const baselineDesign = fontYToDesign(0);
     const emMidDesign = fontYToDesign((ascender + descender) / 2);
 
-    const { minY: pathTop, maxY: pathBottom } = this.getCommandBounds();
+    const { minY: pathTop, maxY: pathBottom } = this.getBounds();
     const pathMid = (pathTop + pathBottom) / 2;
 
     let offsetY = 0;
