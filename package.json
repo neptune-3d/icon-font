@@ -1,6 +1,6 @@
 {
   "name": "@neptune3d/icon-font",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "description": "Library for creating icon fonts with composition.",
   "keywords": [
     "icon",
@@ -42,6 +42,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@neptune3d/path": "0.0.3",
     "@types/opentype.js": "^1.3.8",
     "@types/ttf2woff": "^2.0.4",
     "opentype.js": "^1.3.4",
