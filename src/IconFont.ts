@@ -245,32 +245,36 @@ ${srcBlock}  font-weight: normal;
   /**
    * Generate the base CSS class rule for this font prefix.
    *
-   * Example:
+   * Example (Codicons style):
    * .ni {
-   *   font-family: "neptune";
-   *   font-style: normal;
-   *   font-weight: normal;
-   *   speak: none;
+   *   font: normal normal normal 16px / 1 "neptune";
    *   display: inline-block;
-   *   line-height: 1;
+   *   text-decoration: none;
+   *   text-rendering: auto;
+   *   text-align: center;
    *   text-transform: none;
    *   -webkit-font-smoothing: antialiased;
    *   -moz-osx-font-smoothing: grayscale;
+   *   user-select: none;
+   *   -webkit-user-select: none;
+   *   speak: none;
    * }
    *
    * @returns CSS base class rule string
    */
   toCssBaseClassRule(): string {
     return `.${this.prefix} {
-  font-family: "${this.familyName}";
-  font-style: normal;
-  font-weight: normal;
-  speak: none;
+  font: normal normal normal 16px / 1 "${this.familyName}";
   display: inline-block;
-  line-height: 1;
+  text-decoration: none;
+  text-rendering: auto;
+  text-align: center;
   text-transform: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  -webkit-user-select: none;
+  speak: none;
 }`;
   }
 
