@@ -389,4 +389,24 @@ export class IconPath extends Path {
     }
     return merged;
   }
+
+  /**
+   * Factory method to construct an IconPath from an SVG path data string.
+   *
+   * - Calls `Path.parsePathData` to normalize the raw string into absolute PathCommand objects.
+   * - Returns a new IconPath instance with those commands.
+   *
+   * @param raw   SVG path data string (the `d` attribute)
+   * @param width Optional width of the viewBox (default 24)
+   * @param height Optional height of the viewBox (default = width)
+   * @returns New IconPath instance containing parsed commands
+   */
+  static fromPathData(
+    raw: string,
+    width = 24,
+    height: number = width
+  ): IconPath {
+    const commands = Path.parsePathData(raw);
+    return new IconPath(width, height, commands);
+  }
 }
